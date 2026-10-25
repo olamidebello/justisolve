@@ -1,0 +1,32 @@
+---
+- name: Deploy current demo profile resources
+  ansible.builtin.import_playbook: justice-platform.yml
+
+- name: Create a fictional profile for every judicial role
+  hosts: all
+  become: true
+  vars:
+    app_dir: /opt/aicourtsystem
+    compose_project: docker
+  tasks:
+    - name: Detect Compose plugin
+      ansible.builtin.command: docker compose version
+      register: demo_plugin
+      failed_when: false
+      changed_when: false
+    - name: Select Compose command
+      ansible.builtin.set_fact:
+        demo_compose: "{{ 'docker compose' if demo_plugin.rc == 0 else 'docker-compose' }}"
+    - name: Seed isolated synthetic profiles without creating login accounts
+      ansible.builtin.command:
+        argv: "{{ demo_compose.split() + ['-p',compose_project,'--env-file','.env','-f','docker/docker-compose.yml','exec','-T','api','node','-'] }}"
+        chdir: '{{ app_dir }}'
+        stdin: |
+          const {DbService}=require('./dist/db.service');const {DemoProfilesService}=require('./dist/demo-profiles.service');
+          const db=new DbService();
+          new DemoProfilesService(db).seed('server-admin').then(r=>console.log(JSON.stringify(r))).catch(()=>{console.error('Demo profile creation failed.');process.exitCode=1;}).finally(()=>db.onModuleDestroy());
+      register: demo_result
+      changed_when: '(demo_result.stdout | from_json).created > 0'
+    - name: Report demo location
+      ansible.builtin.debug:
+        msg: 'Open Administration > Role Demo Profiles. All profiles are fictional and separate from production accounts. Existing demo progress is preserved on reruns.'

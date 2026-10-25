@@ -1,4 +1,5 @@
 'use client';
+import DemoProfiles from './demo-profiles';
 import CommunicationsAdmin from './communications-admin';
 import PlatformControls from './platform-controls';
 import AiProvisioning from './ai-provisioning';
@@ -11,12 +12,13 @@ export default function Admin({api}:{api:string}){
  const initial={name:'',source:'courtlistener',keywords:'',provider:'',interval_minutes:60,max_items:2,auto_publish:true,allow_external:false,generate_media:true,enabled:true};
  const [campaign,setCampaign]=useState<any>(initial),[edit,setEdit]=useState<any>(null);
  async function request(path:string,method='GET',body?:any){const r=await fetch(api+'/admin/'+path,{method,headers:{'Content-Type':'application/json'},...(body?{body:JSON.stringify(body)}:{}),cache:'no-store'});const d=await r.json();if(!r.ok)throw Error(d.message||'Operation failed');return d;}
- async function load(){if(['commerce','ai-provisioning','platform-controls','communications'].includes(tab))return;try{setData(await request(tab));}catch(e:any){setMessage(e.message);}}
+ async function load(){if(['commerce','ai-provisioning','platform-controls','communications','demo-profiles'].includes(tab))return;try{setData(await request(tab));}catch(e:any){setMessage(e.message);}}
  useEffect(()=>{setData(null);setEdit(null);setResetLink(null);load();},[tab]);
  useEffect(()=>{fetch(api+'/ai/providers').then(r=>r.ok?r.json():[]).then(setProviders).catch(()=>{});},[api]);
  async function recovery(id:any){setBusy(true);setResetLink(null);try{setResetLink(await request('accounts/'+id+'/reset-link','POST',{}));setMessage('A single-use reset link was generated. Send it privately to the account owner.');}catch(e:any){setMessage(e.message);}finally{setBusy(false);}}
  async function act(path:string,method:string,body?:any){setBusy(true);setMessage('');try{const d=await request(path,method,body);setMessage(d.status?'Result: '+d.status:'Saved.');await load();return true;}catch(e:any){setMessage(e.message);return false;}finally{setBusy(false);}}
- return <section className="panel"><h2>Super Admin Control Center</h2><div className="actions">{['communications','platform-controls','ai-provisioning','commerce','overview','accounts','organizations','campaigns','court-automations','news','runs','resources','audit','requests'].map(t=><button key={t} onClick={()=>setTab(t)} disabled={busy}>{t==='communications'?'Email & Phone Services':t==='platform-controls'?'Firms & Feature Controls':t==='commerce'?'Keys, APIs & Billing':t==='ai-provisioning'?'AI Provisioning':t}</button>)}<button onClick={load} disabled={busy}>Refresh</button><a href="/news" target="_blank" rel="noopener noreferrer">Open public News</a><a href="/policies">Policies</a></div>{message&&<p role="status">{message}</p>}{busy&&<p>Working… Long AI/media jobs may take several minutes.</p>}
+ return <section className="panel"><h2>Super Admin Control Center</h2><div className="actions">{['demo-profiles','communications','platform-controls','ai-provisioning','commerce','overview','accounts','organizations','campaigns','court-automations','news','runs','resources','audit','requests'].map(t=><button key={t} onClick={()=>setTab(t)} disabled={busy}>{t==='demo-profiles'?'Role Demo Profiles':t==='communications'?'Email & Phone Services':t==='platform-controls'?'Firms & Feature Controls':t==='commerce'?'Keys, APIs & Billing':t==='ai-provisioning'?'AI Provisioning':t}</button>)}<button onClick={load} disabled={busy}>Refresh</button><a href="/news" target="_blank" rel="noopener noreferrer">Open public News</a><a href="/policies">Policies</a></div>{message&&<p role="status">{message}</p>}{busy&&<p>Working… Long AI/media jobs may take several minutes.</p>}
+ {tab==='demo-profiles'&&<DemoProfiles/>}
  {tab==='communications'&&<CommunicationsAdmin/>}
  {tab==='platform-controls'&&<PlatformControls/>}
  {tab==='ai-provisioning'&&<AiProvisioning api={api}/>}

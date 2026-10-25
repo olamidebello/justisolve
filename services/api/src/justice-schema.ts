@@ -1,4 +1,9 @@
 export const JUSTICE_SCHEMA=`
+CREATE TABLE IF NOT EXISTS justice_demo_profiles (
+ role_id TEXT PRIMARY KEY,profile JSONB NOT NULL,
+ created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 CREATE TABLE IF NOT EXISTS justice_roles (
  account_id BIGINT NOT NULL REFERENCES platform_accounts(id),role_id TEXT NOT NULL,
  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','revoked')),
