@@ -1,6 +1,7 @@
 import { Body, Controller, Get, Post, Patch, Delete, Param, Req, Res, BadRequestException, UnauthorizedException, ConflictException } from '@nestjs/common';
 import { randomBytes,randomUUID } from 'crypto';
 import axios from 'axios';
+import {JUSTICE_ROLES} from '../justice-catalog';
 import { DbService } from '../db.service';
 import { digest, passwordHash, passwordMatches, secretMatches } from '../auth';
 
@@ -26,7 +27,20 @@ export class AdminController {
  }
  @Get('auth/me') me(@Req() req:any){return req.admin;}
  @Post('auth/logout') async logout(@Req() req:any,@Res({passthrough:true}) res:any){const token=String(req.headers.cookie||'').match(/(?:^|;\s*)justisolve_session=([a-f0-9]{64})/)?.[1];if(token)await this.db.query('DELETE FROM platform_sessions WHERE token_hash=$1',[digest(token)]);res.clearCookie('justisolve_session',{path:'/api',httpOnly:true,secure:process.env.COOKIE_SECURE!=='false',sameSite:'strict'});return {ok:true};}
- @Get('accounts') async accounts(){return (await this.db.query('SELECT a.id,a.email,a.name,a.role,a.active,a.email_verified,a.admin_approved,a.demo_role_id,a.profile,a.created_at,coalesce(w.balance_cents,0) balance_cents FROM platform_accounts a LEFT JOIN commerce_wallets w ON w.account_id=a.id WHERE a.deleted_at IS NULL ORDER BY a.id')).rows;}
+ @Get('accounts') async accounts(){
+  const [accounts,roles,members]=await Promise.all([
+   this.db.query('SELECT a.id,a.email,a.name,a.role,a.active,a.email_verified,a.admin_approved,a.demo_role_id,a.profile,a.created_at,coalesce(w.balance_cents,0) balance_cents FROM platform_accounts a LEFT JOIN commerce_wallets w ON w.account_id=a.id WHERE a.deleted_at IS NULL ORDER BY a.id'),
+   this.db.query('SELECT account_id,role_id,status,organization,jurisdiction,license_valid_until FROM justice_roles ORDER BY role_id'),
+   this.db.query('SELECT m.account_id,m.role,m.active,o.id org_id,o.name,o.kind,o.active organization_active FROM justice_org_members m JOIN justice_orgs o ON o.id=m.org_id ORDER BY o.name,o.id')
+  ]);
+  const catalog=new Map(JUSTICE_ROLES.map(r=>[r.id,r]));
+  const workspaceDescriptions:Record<string,string>={owner:'Owns the workspace and manages membership, settings and ownership transfers.',admin:'Manages permitted workspace members and settings.',counsel:'Participates as counsel in explicitly assigned matters.',staff:'Supports assigned workspace and case tasks.',client:'Uses permitted client services and explicitly assigned matters.',pro_se:'Manages self-represented work within assigned case permissions.'};
+  return accounts.rows.map(a=>({...a,system_role_description:a.demo_role_id?'Restricted training login: access only to its own fictional profile and practice workflow.':a.role==='super_admin'?'Manages platform users, credits, integrations, configuration and feature controls. Private case content still requires assigned access.':'Uses personal tools and explicitly assigned workspace and case access; cannot administer the platform.',
+   professional_roles:roles.rows.filter(r=>String(r.account_id)===String(a.id)).map(r=>{const definition=catalog.get(r.role_id);return {role_id:r.role_id,label:definition?.label||r.role_id,group:definition?.group||'unknown',category:definition?.category||'Unrecognized professional roles',description:definition?.duties||'No catalog description is available for this role.',status:r.status,organization:r.organization,jurisdiction:r.jurisdiction,credential_review_required:!!definition?.license_profession,credential_review_current:!!r.license_valid_until&&new Date(r.license_valid_until).getTime()>Date.now(),credential_valid_until:r.license_valid_until};}),
+   demo_role:a.demo_role_id?catalog.get(a.demo_role_id)||null:null,
+   workspace_memberships:members.rows.filter(m=>String(m.account_id)===String(a.id)).map(m=>({org_id:m.org_id,name:m.name,kind:m.kind,role:m.role,active:m.active,organization_active:m.organization_active,description:workspaceDescriptions[m.role]||'Access follows the assigned workspace role.'}))
+  }));
+ }
  @Post('accounts/:id/reset-link') async resetLink(@Param('id') id:string,@Req() req:any,@Res({passthrough:true}) res:any){
   if(!/^\d+$/.test(id))throw new BadRequestException('Valid account ID required.');
   const origin=new URL(process.env.PUBLIC_APP_URL||'https://justisolve.com');if(origin.protocol!=='https:'||origin.username||origin.password)throw new BadRequestException('Configure a valid HTTPS public application URL.');

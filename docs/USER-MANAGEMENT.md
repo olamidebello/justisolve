@@ -49,3 +49,21 @@ ansible-pull -U https://github.com/olamidebello/justisolve.git -C main \
   -d /opt/justisolve-bootstrap -i localhost, -c local \
   ansible/justice-platform.yml
 ```
+
+## Grouped user inventory and role descriptions
+
+Users are grouped by professional role category by default, with separate demo
+categories and an unassigned category. Use **Group users by** to switch to system
+role, workspace, profile organization, account status or an ungrouped list. Search
+also matches role names, categories, role organizations/jurisdictions and workspace
+names. Each group shows its user count; the overall total counts unique accounts.
+Multi-role users appear in every matching category but once per category, and
+multi-workspace members appear in every workspace group.
+
+Every card explains the system role, each requested professional title and its
+catalog duties, approval status and applicable platform credential-review state.
+Workspace memberships show the role description and whether the membership and
+workspace are active. Synthetic demo titles are labeled as training only. These
+are inventory views; grouping and descriptions grant no new permissions and do
+not assert professional credentials or authority. No password hashes, credential
+claims, license evidence or private case contents are returned by this view.
