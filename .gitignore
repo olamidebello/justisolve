@@ -10,3 +10,9 @@ __pycache__/
 .DS_Store
 
 inspection-reports/
+
+# Android signing keys must remain private and outside source control.
+*.jks
+*.keystore
+*.apk.idsig
+mobile/android/build/

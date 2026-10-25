@@ -1,0 +1,32 @@
+---
+- name: Deploy JustiSolve mobile install page and verified Android preview
+  ansible.builtin.import_playbook: justice-platform.yml
+
+- name: Check mobile resources on the existing application
+  hosts: all
+  become: true
+  vars:
+    app_dir: /opt/aicourtsystem
+  tasks:
+    - name: Verify committed Android APK checksum
+      ansible.builtin.command:
+        argv: [sha256sum, -c, justisolve-preview.apk.sha256]
+        chdir: '{{ app_dir }}/services/web/public/mobile'
+      changed_when: false
+    - name: Verify public HTTPS install page
+      ansible.builtin.uri:
+        url: https://justisolve.com/install
+        validate_certs: true
+        status_code: 200
+        return_content: true
+      register: mobile_install_page
+      failed_when: mobile_install_page.status != 200 or 'Android preview APK' not in mobile_install_page.content
+    - name: Verify public HTTPS APK download
+      ansible.builtin.uri:
+        url: https://justisolve.com/mobile/justisolve-preview.apk
+        method: HEAD
+        validate_certs: true
+        status_code: 200
+    - name: Report installed mobile resources
+      ansible.builtin.debug:
+        msg: 'Install: https://justisolve.com/install — Android development preview and browser installation for Android/iPhone. No Google Play or Apple App Store publication is performed.'

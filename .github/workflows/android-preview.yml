@@ -1,0 +1,27 @@
+name: Build JustiSolve Android preview
+on:
+  push:
+    branches: [main]
+    paths: ['mobile/android/**', '.github/workflows/android-preview.yml']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: android-actions/setup-android@v3
+      - name: Install Android build platform
+        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+      - name: Build and verify development preview
+        run: python3 mobile/android/build.py --sdk "$ANDROID_HOME" --signing "$RUNNER_TEMP/preview-signing" --output "$RUNNER_TEMP/justisolve-preview"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: justisolve-android-preview
+          path: ${{ runner.temp }}/justisolve-preview/*
+          retention-days: 14
