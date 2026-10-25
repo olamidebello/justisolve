@@ -38,7 +38,7 @@ function Workspace(){
  async function search(){if(!q.trim())return;setBusy(true);setError('');try{setData(await get('/search?q='+encodeURIComponent(q)));setTab('search')}catch(e:any){setError(e.message||'Search failed.')}finally{setBusy(false)}}
  return <div className="shell">
   <aside><div className="brand"><img className="brandLogo" src="/justisolve-logo.png" alt="JustiSolve — Intelligent Solutions. Fairer Justice." width={1536} height={1024}/><span className="brandSlogan">Intelligent Solutions. Fairer Justice.</span></div>
-   <nav>{modules.map(([id,label])=><button key={id} className={tab===id?'active':''} onClick={()=>setTab(id)}>{label}</button>)}</nav>
+   <nav aria-label="Main navigation">{modules.map(([id,label])=><button key={id} className={tab===id?'active':''} aria-current={tab===id?'page':undefined} onClick={()=>setTab(id)}>{label}</button>)}</nav>
    <div className="asideFoot"><span>Private workspace</span><small>Access follows assigned permissions</small></div>
   </aside>
   <main>
@@ -53,7 +53,7 @@ function Workspace(){
    {tab==='marketplace'&&<Marketplace api={API}/>}
    {tab==='pacer'&&<Pacer api={API}/>}
    {tab==='ensemble'&&<Ensemble api={API}/>}
-   {tab==='dashboard'&&<section className="cards">{['cases','documents','evidence','tasks','deadlines','alerts'].map(k=><article key={k}><small>{k.toUpperCase()}</small><strong>{data?.[k]??'—'}</strong><span>Current workspace</span></article>)}</section>}
+   {tab==='dashboard'&&<section className="cards">{['cases','documents','evidence','tasks','deadlines','alerts'].map(k=><button type="button" className="dashboard-card" key={k} aria-label={'Open '+k.charAt(0).toUpperCase()+k.slice(1)} onClick={()=>setTab(k)}><small>{k.toUpperCase()}</small><strong>{data?.[k]??'—'}</strong><span>View {k} →</span></button>)}</section>}
    {tab==='dashboard'&&<section className="panel"><h2>Quick Actions</h2><div className="actions"><button onClick={()=>setTab('cases')}>New case</button><button onClick={()=>setTab('evidence')}>Evidence</button><button onClick={()=>setTab('analyze')}>Analyze record</button><button onClick={()=>setTab('draft')}>Draft filing</button><button onClick={()=>setTab('deadlines')}>Deadlines</button><button onClick={()=>setTab('research')}>Research</button></div></section>}
    {tab==='cases'&&<><section className="panel"><h2>Create Case</h2><div className="formGrid">{Object.keys(form).map(k=><input key={k} placeholder={k.replaceAll('_',' ')} value={form[k]} onChange={e=>setForm({...form,[k]:e.target.value})}/>)}</div><button className="primary" disabled={busy} onClick={addCase}>Create Case</button></section><Table data={data}/></>}
    {['dockets','documents','evidence','transcripts','research','tasks','deadlines','alerts','audit','search'].includes(tab)&&<Table data={data}/>}
