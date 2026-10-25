@@ -64,7 +64,7 @@ export class AccountAccessController {
  @Post('forgot-password') async forgot(@Body() b:any){
   await this.available();const email=emailInput(b.email);
   const a=(await this.db.query('SELECT id,email,email_verified FROM platform_accounts WHERE email=$1 AND active=true',[email])).rows[0];
-  if(a)await this.issue(a,a.email_verified?'reset':'verify');
+  if(a&&!a.email.endsWith('@demo.justisolve.invalid'))await this.issue(a,a.email_verified?'reset':'verify');
   return generic;
  }
  @Post('reset-password') async reset(@Body() b:any){passwordInput(b.password);return this.consume(b.token,'reset',await passwordHash(b.password));}

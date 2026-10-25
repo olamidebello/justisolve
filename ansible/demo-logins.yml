@@ -1,0 +1,66 @@
+---
+- name: Deploy and complete all synthetic demo profiles
+  ansible.builtin.import_playbook: demo-profiles.yml
+
+- name: Create isolated login accounts for every demo role
+  hosts: all
+  become: true
+  vars:
+    app_dir: /opt/aicourtsystem
+    compose_project: docker
+    demo_credentials_path: /etc/justisolve/demo-logins.json
+  tasks:
+    - name: Prepare private credential directory
+      ansible.builtin.file:
+        path: '{{ demo_credentials_path | dirname }}'
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Check previous credential export
+      ansible.builtin.stat:
+        path: '{{ demo_credentials_path }}'
+      register: demo_credentials_stat
+    - name: Protect previous credential export
+      ansible.builtin.file:
+        path: '{{ demo_credentials_path }}'
+        owner: root
+        group: root
+        mode: '0600'
+      when: demo_credentials_stat.stat.exists
+    - name: Load previous credential export privately
+      ansible.builtin.slurp:
+        src: '{{ demo_credentials_path }}'
+      when: demo_credentials_stat.stat.exists
+      register: demo_previous_export
+      no_log: true
+    - name: Detect Compose plugin
+      ansible.builtin.command: docker compose version
+      register: demo_login_plugin
+      failed_when: false
+      changed_when: false
+    - name: Select Compose command
+      ansible.builtin.set_fact:
+        demo_login_compose: "{{ 'docker compose' if demo_login_plugin.rc == 0 else 'docker-compose' }}"
+    - name: Generate unique demo passwords and restricted login accounts
+      ansible.builtin.command:
+        argv: "{{ demo_login_compose.split() + ['-p',compose_project,'--env-file','.env','-f','docker/docker-compose.yml','exec','-T','api','node','-'] }}"
+        chdir: '{{ app_dir }}'
+        stdin: |
+          const {DbService}=require('./dist/db.service');const {DemoProfilesService}=require('./dist/demo-profiles.service');
+          const db=new DbService();
+          new DemoProfilesService(db).provision('server-admin').then(r=>console.log(JSON.stringify(r))).catch(()=>{console.error('Demo login provisioning failed.');process.exitCode=1;}).finally(()=>db.onModuleDestroy());
+      register: demo_login_result
+      changed_when: '(demo_login_result.stdout | from_json).created > 0'
+      no_log: true
+    - name: Save new passwords alongside previous exports
+      ansible.builtin.copy:
+        dest: '{{ demo_credentials_path }}'
+        owner: root
+        group: root
+        mode: '0600'
+        content: "{{ {'login_url': 'https://justisolve.com/', 'credentials': (((demo_previous_export.content | b64decode | from_json).credentials if demo_credentials_stat.stat.exists else []) + (demo_login_result.stdout | from_json).credentials)} | to_nice_json }}"
+      no_log: true
+    - name: Report demo login location without exposing passwords
+      ansible.builtin.debug:
+        msg: 'Demo logins are ready at https://justisolve.com/. Credentials: {{ demo_credentials_path }} (root only). Existing passwords and task progress are preserved on reruns. Each account can access only its own fictional training profile. GUI password resets supersede older exports.'

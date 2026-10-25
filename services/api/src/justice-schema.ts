@@ -4,6 +4,8 @@ CREATE TABLE IF NOT EXISTS justice_demo_profiles (
  created_at TIMESTAMPTZ NOT NULL DEFAULT now(),updated_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+ALTER TABLE justice_demo_profiles ADD COLUMN IF NOT EXISTS account_id BIGINT UNIQUE REFERENCES platform_accounts(id);
+
 CREATE TABLE IF NOT EXISTS justice_roles (
  account_id BIGINT NOT NULL REFERENCES platform_accounts(id),role_id TEXT NOT NULL,
  status TEXT NOT NULL DEFAULT 'pending' CHECK(status IN ('pending','approved','rejected','revoked')),

@@ -1,5 +1,6 @@
 'use client';
 import {RegistrationLicense} from './license';
+import DemoProfiles from './demo-profiles';
 import TenantHub from './tenant-hub';
 import RolePicker from './role-picker';
 import Marketplace from './marketplace';
@@ -73,5 +74,5 @@ export default function AuthGate({children}:{children:React.ReactNode}){
    <p><a href="/news">Public News</a> · <a href="/policies">Terms & Privacy</a></p>
   </section></main>;
  }
- return <><div style={{padding:'8px 20px',background:'#0d1a30',textAlign:'right'}}>{user.email} <button className="primary" disabled={busy} onClick={logout}>Sign out</button>{error&&<p role="alert">{error}</p>}</div>{user.role==='super_admin'?children:<main style={{maxWidth:1100,margin:'auto'}}><TenantHub/><p><a href="/news">News</a> · <a href="/policies">Terms & Privacy</a></p></main>}</>;
+ return <><div style={{padding:'8px 20px',background:'#0d1a30',textAlign:'right'}}>{user.email} <button className="primary" disabled={busy} onClick={logout}>Sign out</button>{error&&<p role="alert">{error}</p>}</div>{user.demo_role_id?<main style={{maxWidth:1100,margin:'auto',padding:20}}><DemoProfiles self/></main>:user.role==='super_admin'?children:<main style={{maxWidth:1100,margin:'auto'}}><TenantHub/><p><a href="/news">News</a> · <a href="/policies">Terms & Privacy</a></p></main>}</>;
 }
