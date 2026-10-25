@@ -6,6 +6,8 @@ CREATE TABLE IF NOT EXISTS platform_accounts (
  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 ALTER TABLE platform_accounts ADD COLUMN IF NOT EXISTS demo_role_id TEXT UNIQUE;
+ALTER TABLE platform_accounts ADD COLUMN IF NOT EXISTS profile JSONB NOT NULL DEFAULT '{}';
+ALTER TABLE platform_accounts ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ;
 CREATE TABLE IF NOT EXISTS platform_sessions (
  token_hash TEXT PRIMARY KEY,account_id BIGINT NOT NULL REFERENCES platform_accounts(id) ON DELETE CASCADE,
  expires_at TIMESTAMPTZ NOT NULL,created_at TIMESTAMPTZ NOT NULL DEFAULT now()
