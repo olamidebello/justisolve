@@ -16,12 +16,22 @@ jobs:
           distribution: temurin
           java-version: '17'
       - uses: android-actions/setup-android@v3
-      - name: Install Android build platform
-        run: sdkmanager 'platforms;android-35' 'build-tools;35.0.0'
+        with:
+          # v3 defaults include the retired 'tools' package; request only supported packages.
+          packages: 'platform-tools platforms;android-35 build-tools;35.0.0'
+          log-accepted-android-sdk-licenses: false
       - name: Build and verify development preview
         run: python3 mobile/android/build.py --sdk "$ANDROID_HOME" --signing "$RUNNER_TEMP/preview-signing" --output "$RUNNER_TEMP/justisolve-preview"
+      - name: Independently verify preview artifacts
+        working-directory: ${{ runner.temp }}/justisolve-preview
+        run: |
+          sha256sum --check justisolve-preview.apk.sha256
+          "$ANDROID_HOME/build-tools/35.0.0/zipalign" -c 4 justisolve-preview.apk
+          "$ANDROID_HOME/build-tools/35.0.0/apksigner" verify --verbose --print-certs justisolve-preview.apk
+          python3 -m json.tool release.json
       - uses: actions/upload-artifact@v4
         with:
           name: justisolve-android-preview
           path: ${{ runner.temp }}/justisolve-preview/*
+          if-no-files-found: error
           retention-days: 14
