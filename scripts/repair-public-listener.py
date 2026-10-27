@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """Add an explicitly selected local IPv4 listener to the existing JustiSolve TLS block."""
-import argparse, importlib.util, ipaddress, json, os, re, shutil, socket, subprocess, tempfile
+import argparse, importlib.util, ipaddress, json, os, re, shutil, socket, subprocess, tempfile, time
 from pathlib import Path
 
 
@@ -67,13 +67,20 @@ def main():
         subprocess.run(['nginx','-t'],capture_output=True,check=True)
         subprocess.run(['systemctl','reload','nginx'],capture_output=True,check=True)
         context=__import__('ssl').create_default_context()
-        with socket.create_connection((address,443),timeout=15) as raw:
-            with context.wrap_socket(raw,server_hostname='justisolve.com'): pass
-    except Exception:
+        for attempt in range(10):
+            try:
+                with socket.create_connection((address,443),timeout=5) as raw:
+                    with context.wrap_socket(raw,server_hostname='justisolve.com'): pass
+                break
+            except (OSError, __import__('ssl').SSLError):
+                if attempt == 9: raise
+                time.sleep(2)
+    except Exception as error:
         for path,(original,_) in updates.items(): write(path,original)
         subprocess.run(['nginx','-t'],capture_output=True,check=True)
         subprocess.run(['systemctl','reload','nginx'],capture_output=True,check=True)
-        raise SystemExit('Public listener verification failed; restored configuration. Inspect address routing.')
+        detail = (error.stderr.decode(errors='replace') if isinstance(error.stderr, bytes) else error.stderr) if isinstance(error, subprocess.CalledProcessError) else str(error)
+        raise SystemExit('Public listener repair failed; restored configuration. Cause: ' + str(detail))
     print(json.dumps({'changed':bool(updates),'public_ipv4':address,'trusted_public_address_tls':True,'backup':str(backup)}))
 
 if __name__=='__main__': main()

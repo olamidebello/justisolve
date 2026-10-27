@@ -12,7 +12,7 @@
       ansible.builtin.command:
         argv: [python3, '{{ playbook_dir }}/../scripts/repair-public-listener.py', --address, '{{ repair_public_ipv4 }}']
       register: listener_repair
-      changed_when: '(listener_repair.stdout | from_json).changed'
+      changed_when: 'listener_repair.rc == 0 and (listener_repair.stdout | default("{}", true) | from_json).changed | default(false)'
     - name: Report verified public address TLS
       ansible.builtin.debug:
         var: listener_repair.stdout
