@@ -1,0 +1,30 @@
+---
+- name: Repair the existing JustiSolve installation and retain diagnostics
+  hosts: all
+  become: true
+  gather_facts: false
+  vars:
+    app_dir: /opt/aicourtsystem
+    compose_project: docker
+  tasks:
+    - name: Run one locked repair with private backups and logs
+      ansible.builtin.command:
+        argv:
+          - python3
+          - '{{ playbook_dir }}/../scripts/hard-repair.py'
+          - --app-dir
+          - '{{ app_dir }}'
+          - --project
+          - '{{ compose_project }}'
+      register: hard_repair
+      failed_when: false
+    - name: Show repair outcome without exposing configuration or credentials
+      ansible.builtin.debug:
+        msg: '{{ hard_repair.stdout | default("") }} {{ hard_repair.stderr | default("") }}'
+    - name: Require all repair stages and public checks to pass
+      ansible.builtin.assert:
+        that: hard_repair.rc == 0
+        fail_msg: 'Repair incomplete. Read /var/lib/justisolve-hard-repair/report.json and its private repair.log. Do not post the entire log without reviewing it for secrets.'
+    - name: Explain recovery of an older browser installation
+      ansible.builtin.debug:
+        msg: 'Public HTTPS, sign-in HTML, API health and the updated recovery worker passed. Reopen JustiSolve in a fresh browser tab. If only the old offline page remains, test Incognito, then clear only justisolve.com site data if necessary; clearing it signs you out. Server automation cannot remove a service worker from your phone remotely.'
