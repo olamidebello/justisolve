@@ -1,0 +1,6 @@
+---
+- name: Repair certificate validation before checking application connectivity
+  ansible.builtin.import_playbook: repair-tls.yml
+
+- name: Deploy gateway recovery and verify public HTTPS and API
+  ansible.builtin.import_playbook: repair-connectivity.yml

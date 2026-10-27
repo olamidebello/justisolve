@@ -1,0 +1,103 @@
+---
+- name: Repair the existing JustiSolve Nginx certificate without guessing a backend or server IP
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    tls_email: ''
+    tls_probe_address: 127.0.0.1
+    justisolve_tls_lineage: justisolve-tls-repair
+  tasks:
+    - name: Require the existing Nginx host configuration
+      ansible.builtin.stat:
+        path: /etc/nginx/nginx.conf
+      register: justisolve_nginx_config
+    - name: Stop on a host without existing Nginx
+      ansible.builtin.assert:
+        that:
+          - justisolve_nginx_config.stat.isreg | default(false)
+          - justisolve_tls_lineage == 'justisolve-tls-repair'
+        fail_msg: Run this on the existing JustiSolve Nginx server. This repair does not install a guessed virtual host or alter DNS.
+    - name: Install certificate repair prerequisites
+      ansible.builtin.apt:
+        name: [python3, openssl, ca-certificates, certbot, python3-certbot-nginx]
+        state: present
+        update_cache: true
+        cache_valid_time: 3600
+    - name: Create private repair backup root
+      ansible.builtin.file:
+        path: /var/lib/justisolve-tls-repair
+        state: directory
+        owner: root
+        group: root
+        mode: '0700'
+    - name: Inspect exact domain configuration and back up its active files
+      ansible.builtin.command:
+        argv: [python3, '{{ playbook_dir }}/../scripts/tls-preflight.py', --backup-dir, '/var/lib/justisolve-tls-repair/{{ ansible_date_time.epoch }}-{{ 999999 | random }}']
+      register: justisolve_tls_preflight
+      changed_when: false
+    - name: Read the scoped domain repair plan
+      ansible.builtin.set_fact:
+        justisolve_tls_plan: '{{ justisolve_tls_preflight.stdout | from_json }}'
+    - name: Report the hostnames and private backup location
+      ansible.builtin.debug:
+        msg: 'Certificate names: {{ justisolve_tls_plan.names | join(", ") }}. Configuration backup: {{ justisolve_tls_plan.backup }}. Existing proxy routes and application settings will be preserved.'
+    - name: Obtain or renew the isolated JustiSolve certificate using Nginx authentication
+      ansible.builtin.command:
+        argv: "{{ ['certbot','certonly','--nginx','--non-interactive','--agree-tos','--cert-name',justisolve_tls_lineage,'--keep-until-expiring','--expand'] + (justisolve_tls_plan.names | map('regex_replace','^','--domain=') | list) + (['--email',tls_email] if tls_email | length else ['--register-unsafely-without-email']) }}"
+      register: justisolve_certificate
+    - name: Verify certificate names and at least seven days of remaining validity
+      ansible.builtin.command:
+        argv: [openssl, x509, -in, '/etc/letsencrypt/live/{{ justisolve_tls_lineage }}/fullchain.pem', -noout, -checkhost, '{{ item }}', -checkend, '604800']
+      loop: '{{ justisolve_tls_plan.names }}'
+      changed_when: false
+    - name: Install the verified certificate in matching Nginx virtual hosts
+      ansible.builtin.command:
+        argv: [certbot, install, --nginx, --non-interactive, --cert-name, '{{ justisolve_tls_lineage }}', --redirect]
+    - name: Validate the resulting Nginx configuration
+      ansible.builtin.command: nginx -t
+      changed_when: false
+    - name: Reload host Nginx with the verified certificate
+      ansible.builtin.service:
+        name: nginx
+        state: reloaded
+    - name: Verify the locally served SNI certificate and trusted chain for every repaired name
+      ansible.builtin.command:
+        argv: [python3, '-', '{{ tls_probe_address }}', '{{ item }}']
+        stdin: |
+          import json,socket,ssl,sys
+          context=ssl.create_default_context()
+          with socket.create_connection((sys.argv[1],443),timeout=15) as raw:
+              with context.wrap_socket(raw,server_hostname=sys.argv[2]) as connection:
+                  cert=connection.getpeercert()
+                  print(json.dumps({'hostname':sys.argv[2],'trusted_chain':True,'expires':cert['notAfter']}))
+      loop: '{{ justisolve_tls_plan.names }}'
+      changed_when: false
+    - name: Ensure the certificate deployment hook directory exists
+      ansible.builtin.file:
+        path: /etc/letsencrypt/renewal-hooks/deploy
+        state: directory
+        owner: root
+        group: root
+        mode: '0755'
+    - name: Reload only the repaired JustiSolve lineage after successful renewal
+      ansible.builtin.copy:
+        dest: /etc/letsencrypt/renewal-hooks/deploy/justisolve-reload
+        owner: root
+        group: root
+        mode: '0750'
+        content: |
+          #!/bin/sh
+          set -eu
+          if [ "${RENEWED_LINEAGE:-}" = '/etc/letsencrypt/live/justisolve-tls-repair' ]; then
+            /usr/sbin/nginx -t
+            /bin/systemctl reload nginx
+          fi
+    - name: Ensure automatic certificate renewal timer is enabled
+      ansible.builtin.systemd:
+        name: certbot.timer
+        enabled: true
+        state: started
+    - name: Report certificate repair completion
+      ansible.builtin.debug:
+        msg: 'Trusted local TLS now verifies for {{ justisolve_tls_plan.names | join(", ") }}. The next playbook checks application health and public HTTPS. Do not bypass browser certificate warnings.'
