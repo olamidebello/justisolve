@@ -18,7 +18,7 @@ export class DemoProfilesService{
   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
  }
  private details(role:any){return {display_name:role.label+' Demo',account_type:'individual',country:'Fictional demonstration country',region:'Training district',city:'Demo City',address:'Training Center, Fictional Campus',postal_code:'DEMO',timezone:'America/Chicago',language:'English',contact_email:role.id+'@demo.justisolve.invalid',phone:'Not provisioned — demo only',professional_summary:'Synthetic '+role.label+' profile for practicing role-specific duties.',specializations:[role.category],experience:'Fictional training experience only',education:'Demonstration curriculum; no real qualification asserted',license_number:'None — synthetic profile',availability:'Training workspace available on demand',preferences:{notifications:false,paid_services:false,external_integrations:false}};}
- async provision(actor:string,rotateRole?:string){
+ async provision(actor:string,rotateRole?:string,publicPassword?:string){
   await this.seed(actor);
   if(rotateRole&&!JUSTICE_ROLES.some(r=>r.id===rotateRole))throw new BadRequestException('Unknown demo role.');
   const credentials:any[]=[];const c=await this.db.pool.connect();
@@ -26,8 +26,8 @@ export class DemoProfilesService{
    if(!Number((await c.query("SELECT count(*) n FROM platform_accounts WHERE role='super_admin' AND active=true AND demo_role_id IS NULL")).rows[0].n))throw new ConflictException('Create an active super administrator before provisioning demo logins.');
    for(const role of JUSTICE_ROLES.filter(r=>!rotateRole||r.id===rotateRole)){
     const row=(await c.query('SELECT profile,account_id FROM justice_demo_profiles WHERE role_id=$1 FOR UPDATE',[role.id])).rows[0];
-    if(row.account_id&&!rotateRole)continue;
-    const password=randomBytes(24).toString('base64url'),hash=await passwordHash(password);let account;
+    if(row.account_id&&!rotateRole&&!publicPassword)continue;
+    const password=publicPassword||randomBytes(24).toString('base64url'),hash=await passwordHash(password);let account;
     if(row.account_id){
      account=(await c.query("UPDATE platform_accounts SET password_hash=$2 WHERE id=$1 AND demo_role_id=$3 AND role='user' RETURNING id,email,name",[row.account_id,hash,role.id])).rows[0];
      if(!account)throw new ConflictException('Demo mapping is inconsistent; no account was changed.');
@@ -38,11 +38,17 @@ export class DemoProfilesService{
      if(!account)throw new ConflictException('Demo email or role already belongs to an account. No existing account was adopted.');
      await c.query('UPDATE justice_demo_profiles SET account_id=$2 WHERE role_id=$1',[role.id,account.id]);
     }
+    if(publicPassword)await c.query('INSERT INTO public_demo_logins(role_id,account_id,public_password,password_hash) VALUES($1,$2,$3,$4) ON CONFLICT(role_id) DO UPDATE SET account_id=EXCLUDED.account_id,public_password=EXCLUDED.public_password,password_hash=EXCLUDED.password_hash',[role.id,account.id,password,hash]);
     credentials.push({role_id:role.id,role:role.label,name:account.name,email:account.email,password});
    }
    await c.query("INSERT INTO audit_log(actor,action,entity_type,entity_id,meta) VALUES($1,'demo_logins_provisioned','demo','role_catalog',$2)",[actor,{count:credentials.length,rotation:!!rotateRole}]);
    await c.query('COMMIT');return {created:credentials.length,credentials,notice:'Save passwords now. Only password hashes are stored. Demo accounts access only their own fictional training workspace.'};
   }catch(e){await c.query('ROLLBACK');throw e;}finally{c.release();}
+ }
+ async publicLogins(){
+  const rows=(await this.db.query("SELECT p.role_id,a.email,p.public_password password FROM public_demo_logins p JOIN platform_accounts a ON a.id=p.account_id AND a.demo_role_id=p.role_id AND a.password_hash=p.password_hash WHERE a.role='user' AND a.active=true AND a.deleted_at IS NULL AND (a.email_verified=true OR a.admin_approved=true) ORDER BY p.role_id")).rows;
+  const catalog=new Map(JUSTICE_ROLES.map(r=>[r.id,r]));
+  return {notice:'Shared synthetic training accounts only. Progress is shared with other testers. No real case access or paid integrations.',accounts:rows.filter(r=>catalog.has(r.role_id)).map(r=>({...r,role:catalog.get(r.role_id)!.label,category:catalog.get(r.role_id)!.category}))};
  }
  async own(accountId:any,role:string){
   const row=(await this.db.query('SELECT role_id,profile,updated_at FROM justice_demo_profiles WHERE account_id=$1 AND role_id=$2',[accountId,role])).rows[0];

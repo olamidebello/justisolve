@@ -28,3 +28,18 @@ test('global guard confines demo sessions to own profile and tasks even after at
  await assert.rejects(g.canActivate(ctx('/marketplace','GET',true)),/cannot use API keys/);
 });
 test('demo provisioning requires an existing active real administrator and cannot lock out initial bootstrap',async()=>{const f=await fixture();try{await f.db.query("UPDATE platform_accounts SET active=false WHERE role='super_admin'");await assert.rejects(f.s.provision('server-admin'),/active super administrator/);assert.equal((await f.db.query('SELECT count(*) n FROM platform_accounts WHERE demo_role_id IS NOT NULL')).rows[0].n,0);}finally{await f.sql.close();}});
+
+test('public directory exposes only deliberately published active restricted demos and hides rotated passwords',async()=>{
+ const f=await fixture();try{
+  await f.sql.exec("ALTER TABLE platform_accounts ADD COLUMN deleted_at TIMESTAMPTZ;CREATE TABLE public_demo_logins(role_id TEXT PRIMARY KEY,account_id BIGINT REFERENCES platform_accounts(id),public_password TEXT,password_hash TEXT);");
+  assert.equal((await f.s.publicLogins()).accounts.length,0);
+  await f.s.provision('admin','judiciary_1','JustiSolve-Demo-2026!');
+  const directory=await f.s.publicLogins();assert.equal(directory.accounts.length,1);assert.equal(directory.accounts[0].password,'JustiSolve-Demo-2026!');assert.equal(directory.accounts[0].role,'Chief justice / chief judge');assert.equal(directory.accounts[0].password_hash,undefined);
+  await f.db.query("UPDATE platform_accounts SET active=false WHERE demo_role_id='judiciary_1'");assert.equal((await f.s.publicLogins()).accounts.length,0);
+  await f.db.query("UPDATE platform_accounts SET active=true WHERE demo_role_id='judiciary_1'");
+  await f.s.provision('admin','judiciary_1');assert.equal((await f.s.publicLogins()).accounts.length,0);
+  const {AccessGuard}=require('../dist/auth');const g=new AccessGuard({query:async()=>{throw Error('Unexpected authenticated query');}});
+  assert.equal(await g.canActivate({switchToHttp:()=>({getRequest:()=>({path:'/api/justice/demo-profiles/public',method:'GET',headers:{}})})}),true);
+  await assert.rejects(g.canActivate({switchToHttp:()=>({getRequest:()=>({path:'/api/justice/demo-profiles/public',method:'POST',headers:{}})})}),/sign-in required/);
+ }finally{await f.sql.close();}
+});

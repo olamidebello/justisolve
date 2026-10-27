@@ -1,0 +1,35 @@
+---
+- name: Deploy demo directory and current platform
+  ansible.builtin.import_playbook: justice-platform.yml
+
+- name: Publish restricted demo credentials for public testing
+  hosts: all
+  become: true
+  vars:
+    app_dir: /opt/aicourtsystem
+    compose_project: docker
+  tasks:
+    - name: Detect Compose plugin
+      ansible.builtin.command: docker compose version
+      register: demo_plugin
+      changed_when: false
+      failed_when: false
+    - name: Publish all synthetic demo role logins
+      ansible.builtin.command:
+        argv: "{{ (['docker','compose'] if demo_plugin.rc == 0 else ['docker-compose']) + ['-p',compose_project,'--env-file','.env','-f','docker/docker-compose.yml','exec','-T','api','node','-'] }}"
+        chdir: '{{ app_dir }}'
+        stdin: |
+          const {DbService}=require('./dist/db.service');
+          const {DemoProfilesService}=require('./dist/demo-profiles.service');
+          const db=new DbService();
+          new DemoProfilesService(db).provision('server-admin-public-demo',undefined,'JustiSolve-Demo-2026!').then(r=>console.log(JSON.stringify({published:r.created}))).catch(()=>{console.error('Demo publication failed; check demo mappings and the active super administrator.');process.exitCode=1;}).finally(()=>db.onModuleDestroy());
+    - name: Verify public directory contains every catalog role
+      ansible.builtin.uri:
+        url: https://justisolve.com/api/justice/demo-profiles/public
+        return_content: true
+        validate_certs: true
+      register: public_demo_directory
+      failed_when: public_demo_directory.status != 200 or public_demo_directory.json.accounts | length != 173
+    - name: Report public demo URL
+      ansible.builtin.debug:
+        msg: 'Public role accounts and passwords: https://justisolve.com/demo . These shared accounts can only access fictional training profiles. Publishing rotates existing demo passwords and signs out demo sessions; ordinary accounts are unchanged.'

@@ -15,6 +15,7 @@ export class AccessGuard implements CanActivate {
   const req=context.switchToHttp().getRequest();const route=req.path.replace(/^\/api/,'').replace(/\/$/,'');
   if(['/admin/auth/register','/news'].includes(route)||req.method==='GET'&&/^\/news\/\d+\/media\/(audio|video)$/.test(route))await enforceFeature(this.db,route);
   if(['/health','/justice/catalog','/admin/auth/status','/admin/auth/bootstrap','/admin/auth/login','/admin/auth/options','/admin/auth/register','/admin/auth/forgot-password','/admin/auth/reset-password','/admin/auth/verify-email','/news','/policy/requests'].includes(route))return true;
+  if(req.method==='GET'&&route==='/justice/demo-profiles/public')return true;
   if(req.method==='GET'&&/^\/news\/\d+\/media\/(audio|video)$/.test(route))return true;
   if(route==='/internal/ai/config'){if(!secretMatches(req.headers['x-ai-config-token']||'',process.env.AI_CONFIG_TOKEN||''))throw new UnauthorizedException();return true;}
   if(route==='/internal/news/tick'){
