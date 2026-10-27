@@ -25,9 +25,9 @@ def build(sdk,output,signing):
         result=run([tools/'apksigner','verify','--verbose','--print-certs',target],capture_output=True,text=True)
         fingerprint=next(line.split(': ',1)[1] for line in result.stdout.splitlines() if 'certificate SHA-256 digest:' in line)
         manifest=run([tools/'aapt','dump','badging',target],capture_output=True,text=True).stdout
-        if "name='com.justisolve.mobile.preview'" not in manifest or "versionName='0.1.0'" not in manifest:raise ValueError('APK metadata mismatch')
+        if "name='com.justisolve.mobile.preview'" not in manifest or "versionName='0.2.0'" not in manifest:raise ValueError('APK metadata mismatch')
         digest=hashlib.sha256(target.read_bytes()).hexdigest();(output/'justisolve-preview.apk.sha256').write_text(digest+'  justisolve-preview.apk\n')
-        metadata=dict(name='JustiSolve Preview',package='com.justisolve.mobile.preview',version='0.1.0',version_code=1,min_android=8,channel='development-preview',sha256=digest,size_bytes=target.stat().st_size,signing_certificate_sha256=fingerprint,website='https://justisolve.com/',install_url='https://justisolve.com/install',native_background_calls=False)
+        metadata=dict(name='JustiSolve Preview',package='com.justisolve.mobile.preview',version='0.2.0',version_code=2,min_android=8,channel='development-preview',sha256=digest,size_bytes=target.stat().st_size,signing_certificate_sha256=fingerprint,website='https://justisolve.com/',install_url='https://justisolve.com/install',native_background_calls=False)
         (output/'release.json').write_text(json.dumps(metadata,indent=2)+'\n');print(json.dumps(metadata))
 if __name__=='__main__':
     parser=argparse.ArgumentParser();parser.add_argument('--sdk',type=Path,default=Path(os.environ.get('ANDROID_HOME','/opt/android-sdk')));parser.add_argument('--output',type=Path,default=ROOT.parents[1]/'services/web/public/mobile');parser.add_argument('--signing',required=True,type=Path);args=parser.parse_args();build(args.sdk,args.output,args.signing)

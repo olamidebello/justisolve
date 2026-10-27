@@ -73,3 +73,7 @@ checksum and listing, plus `ansible/deploy-justisolve-mobile.yml`. Run that play
 on the store server to update the existing service and upsert the JustiSolve
 listing while retaining other apps and administrator visibility preferences.
 A repository push alone does not change either live server.
+
+## Preview 0.2.0
+
+Adds direct Demo and Install navigation. A new preview signing certificate requires uninstalling 0.1.0 before installing 0.2.0. Uninstall clears local sign-in state but retains server accounts and records. The private development signing backup is separate from this repository. Physical device testing is pending.
