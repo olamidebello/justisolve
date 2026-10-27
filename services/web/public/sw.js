@@ -1,5 +1,7 @@
-/* Never cache authenticated pages, API responses, case files or AI output. */
-const SHELL='justisolve-public-shell-v1';
-self.addEventListener('install',event=>{event.waitUntil(caches.open(SHELL).then(cache=>cache.addAll(['/offline.html','/mobile/icon-192.png','/mobile/icon-512.png'])).then(()=>self.skipWaiting()));});
+/* Only public recovery assets are cached. Private pages and API responses never are. */
+const SHELL='justisolve-public-shell-v2';
+self.addEventListener('install',event=>{event.waitUntil(caches.open(SHELL).then(cache=>cache.addAll(['/offline.html','/recovery.js','/mobile/icon-192.png','/mobile/icon-512.png'])).then(()=>self.skipWaiting()));});
 self.addEventListener('activate',event=>{event.waitUntil(caches.keys().then(keys=>Promise.all(keys.filter(k=>k.startsWith('justisolve-public-shell-')&&k!==SHELL).map(k=>caches.delete(k)))).then(()=>self.clients.claim()));});
-self.addEventListener('fetch',event=>{const url=new URL(event.request.url);if(event.request.method!=='GET'||url.origin!==self.location.origin||url.pathname.startsWith('/api/'))return;if(event.request.mode==='navigate'){event.respondWith(fetch(event.request).catch(()=>caches.match('/offline.html')));}});
+async function unavailable(){const cached=await caches.match('/offline.html');return new Response(cached?await cached.text():'JustiSolve is temporarily unreachable. Please retry.',{status:503,headers:{'Content-Type':'text/html; charset=utf-8','Cache-Control':'no-store','X-JustiSolve-Recovery':'1'}});}
+async function navigation(request){const controller=new AbortController(),timer=setTimeout(()=>controller.abort(),15000);try{const response=await fetch(request,{cache:'no-store',signal:controller.signal});return response.status>=500?await unavailable():response;}catch{return unavailable();}finally{clearTimeout(timer);}}
+self.addEventListener('fetch',event=>{const url=new URL(event.request.url);if(event.request.method!=='GET'||url.origin!==self.location.origin||url.pathname.startsWith('/api/'))return;if(url.pathname==='/recovery.js'){event.respondWith(caches.match('/recovery.js').then(cached=>cached||fetch(event.request)));return;}if(event.request.mode==='navigate')event.respondWith(navigation(event.request));});

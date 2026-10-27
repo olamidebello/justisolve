@@ -1,6 +1,6 @@
 'use client';
 import {useEffect,useState} from 'react';
-export function MobileAppLink(){useEffect(()=>{if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{scope:'/'}).catch(()=>{});},[]);return <div className="mobile-app-link"><a href="/install">Install JustiSolve app</a></div>;}
+export function MobileAppLink(){useEffect(()=>{if('serviceWorker' in navigator)navigator.serviceWorker.register('/sw.js',{scope:'/',updateViaCache:'none'}).then(registration=>registration.update()).catch(()=>{});},[]);return <div className="mobile-app-link"><a href="/install">Install JustiSolve app</a></div>;}
 export default function MobileInstall(){
  const [prompt,setPrompt]=useState<any>(null),[installed,setInstalled]=useState(false),[message,setMessage]=useState('');
  useEffect(()=>{setInstalled(window.matchMedia('(display-mode: standalone)').matches||(navigator as any).standalone===true);const before=(e:any)=>{e.preventDefault();setPrompt(e);};const done=()=>{setInstalled(true);setPrompt(null);};window.addEventListener('beforeinstallprompt',before);window.addEventListener('appinstalled',done);return()=>{window.removeEventListener('beforeinstallprompt',before);window.removeEventListener('appinstalled',done);};},[]);

@@ -98,6 +98,36 @@
       delay: 3
       until: commerce_health.rc == 0
       changed_when: false
+    - name: Ensure the application gateway is running
+      ansible.builtin.command:
+        argv: "{{ commerce_compose.split() + ['-p',compose_project,'--env-file','.env','-f','docker/docker-compose.yml','up','-d','--no-deps','nginx'] }}"
+        chdir: '{{ app_dir }}'
+    - name: Validate application gateway configuration
+      ansible.builtin.command:
+        argv: "{{ commerce_compose.split() + ['-p',compose_project,'--env-file','.env','-f','docker/docker-compose.yml','exec','-T','nginx','nginx','-t'] }}"
+        chdir: '{{ app_dir }}'
+      changed_when: false
+    - name: Reload gateway to resolve recreated API and web container addresses
+      ansible.builtin.command:
+        argv: "{{ commerce_compose.split() + ['-p',compose_project,'--env-file','.env','-f','docker/docker-compose.yml','exec','-T','nginx','nginx','-s','reload'] }}"
+        chdir: '{{ app_dir }}'
+    - name: Verify sign-in HTML and database health through the gateway
+      ansible.builtin.command:
+        argv: "{{ commerce_compose.split() + ['-p',compose_project,'--env-file','.env','-f','docker/docker-compose.yml','exec','-T','web','node','-'] }}"
+        chdir: '{{ app_dir }}'
+        stdin: |
+          (async()=>{
+            const page=await fetch('http://nginx/',{headers:{Host:'justisolve.com'},signal:AbortSignal.timeout(15000)});
+            const html=await page.text();if(!page.ok||!html.includes('/_next/')||html.includes('data-justisolve-recovery'))throw Error('Sign-in HTML unavailable through gateway');
+            const response=await fetch('http://nginx/api/health',{signal:AbortSignal.timeout(15000)});
+            const health=await response.json();if(!response.ok||health.ok!==true)throw Error('API health unavailable through gateway');
+            console.log('Application HTML and API health verified through gateway.');
+          })().catch(()=>{console.error('Application gateway verification failed; inspect the nginx, web and api services.');process.exitCode=1;});
+      register: commerce_gateway_health
+      changed_when: false
+      retries: 10
+      delay: 3
+      until: commerce_gateway_health.rc == 0
     - name: Report configuration destination
       ansible.builtin.debug:
         msg: 'Open Administration > commerce to configure gateways and PACER credentials, enable system PACER, and grant user access. Keys were not printed. Back up the production .env securely; the encryption key is required to recover saved credentials.'

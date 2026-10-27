@@ -1,0 +1,39 @@
+---
+- name: Repair application deployment and gateway routing
+  ansible.builtin.import_playbook: justice-platform.yml
+
+- name: Verify browser recovery resources and public routing
+  hosts: all
+  become: true
+  tasks:
+    - name: Verify public application page without a browser service worker
+      ansible.builtin.uri:
+        url: https://justisolve.com/?connectivity_check=1
+        validate_certs: true
+        status_code: 200
+        return_content: true
+        timeout: 30
+        headers:
+          Cache-Control: no-cache
+      register: connectivity_page
+      failed_when: connectivity_page.status != 200 or '/_next/' not in connectivity_page.content or 'data-justisolve-recovery' in connectivity_page.content
+    - name: Verify public database-backed API health
+      ansible.builtin.uri:
+        url: https://justisolve.com/api/health
+        validate_certs: true
+        status_code: 200
+        return_content: true
+        timeout: 30
+      register: connectivity_api
+      failed_when: connectivity_api.status != 200 or not (connectivity_api.json.ok | default(false))
+    - name: Verify current browser recovery worker
+      ansible.builtin.uri:
+        url: https://justisolve.com/sw.js
+        validate_certs: true
+        status_code: 200
+        return_content: true
+      register: connectivity_worker
+      failed_when: connectivity_worker.status != 200 or 'justisolve-public-shell-v2' not in connectivity_worker.content
+    - name: Report browser recovery instructions
+      ansible.builtin.debug:
+        msg: 'Application, gateway, public HTTPS and API are responding. Reload JustiSolve or tap Try again on an old offline page. The new recovery page checks the service automatically. Existing accounts, cookies, keys and case data were preserved.'
